@@ -6,6 +6,7 @@ Parameter CONTENTTYPE = "application/json";
 XData UrlMap [ XMLNamespace = "http://www.intersystems.com/urlmap" ]
 {
 <Routes>
+    <Route Url="/auth/login" Method="POST" Call="Login"  />
     <Route Url="/agent/chat" Method="POST" Call="AgentChat"/>
     <Route Url="/deploy-app" Method="POST" Call="DeployApp"/>
     <Route Url="/generate-fhir" Method="POST" Call="GenerateFHIR"/>
@@ -16,6 +17,43 @@ XData UrlMap [ XMLNamespace = "http://www.intersystems.com/urlmap" ]
     <Route Url="/scanner/assets" Method="GET" Call="ListAssets"/>
     <Route Url="/scanner/analyze" Method="POST" Call="AnalyzeAsset"/>
 </Routes>
+}
+
+ClassMethod Login() As %Status
+{
+    Set %response.ContentType = ..#CONTENTTYPE
+    Set tSC = $$$OK
+    Try {
+        Set payload = {}.%FromJSON(%request.Content)
+        Set tUsername = payload.username
+        
+        If (tUsername = "") {
+            Write {"valid": false, "reason": "Empty username"}.%ToJSON()
+            Return $$$OK
+        }
+
+        Set req = ##class(%Net.HttpRequest).%New()
+        Set req.Server = "community.intersystems.com"
+        Set req.Https = 1
+        Set req.SSLConfiguration = "ISC.FeatureTracker.SSL.Config"
+        Set req.Timeout = 5 
+        
+        Set tSC = req.Head("/user/"_tUsername)
+        If $$$ISERR(tSC) {
+            Write {"valid": false, "reason": "Network Error"}.%ToJSON()
+            Return $$$OK
+        }
+        
+        If ($IsObject(req.HttpResponse) && (req.HttpResponse.StatusCode = 200)) {
+            Write {"valid": true, "username": (tUsername)}.%ToJSON()
+        } Else {
+            Write {"valid": false, "reason": "User not found (404)"}.%ToJSON()
+        }
+
+    } Catch ex {
+        Write {"error": (ex.DisplayString())}.%ToJSON()
+    }
+    Return $$$OK
 }
 
 /// Helper: Extrai API Key do Header "Authorization: Bearer sk-..."
