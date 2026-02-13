@@ -47,7 +47,8 @@ Parameter INTEROPPROMPT = {"You are the Interoperability Agent. Generate InterSy
     "1. For Data Transformations, generate a Class extending 'Ens.DataTransformDTL'."_
     "2. CRITICAL: In the <transform> tag, ALWAYS include: xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'."_
     "3. For Operations, generate a Class extending 'Ens.BusinessOperation' with MessageMap."_
-    "4. Output ONLY the ObjectScript code."};
+    "4. For Services, generate a Class extending 'Ens.BusinessService'."_
+    "5. Output ONLY the ObjectScript code."};
 
 Parameter FHIRPROMPT = {"You are the FHIR Agent. Generate a FHIR R4 Bundle JSON based on the request."_
     "Output ONLY the JSON."};
@@ -64,20 +65,19 @@ Parameter SUPERVISORPROMPT = {"You are a STRICT Router. You do NOT write code. Y
     "1. For Visuals/Screens/HTML/App/UI -> '[DELEGATE: UI] <instructions>'."_
     "2. For Database/Tables/SQL/Classes -> '[DELEGATE: BACKEND] <instructions>'."_
     "3. For REST API/Endpoints -> '[DELEGATE: API] <instructions>'."_
-    "4. For Interop/DTL/HL7 -> '[DELEGATE: INTEROP] <instructions>'."_
-    "5. For JSON Data/Mock -> '[DELEGATE: FHIR] <instructions>'."_
-    "6. For Data Import -> '[DELEGATE: INTEGRATION] <content>'."_
+    "4. For Interop Components (Business Service, Business Operation, DTL, Transformations) -> '[DELEGATE: INTEROP] <instructions>'."_
+    "5. For Generating/Mocking JSON Data -> '[DELEGATE: FHIR] <instructions>'."_
+    "6. For Loading/Importing Data -> '[DELEGATE: INTEGRATION] <content>'."_
     "7. If no code is needed -> Just answer the user."};
 
 /// =========================================================
-/// 2. ORCHESTRATOR LOGIC (LANGGRAPH-LITE)
+/// 2. ORCHESTRATOR LOGIC
 /// =========================================================
 ClassMethod AgentRun(pSessionId As %String, pTenantId As %String, pUserPrompt As %String, pApiKey As %String, pModel As %String) As %DynamicObject
 {
     Set tResponse = { "type": "text", "content": "" }
     
     Try {
-        // 1. Load Session from Storage or Create New
         Set tSession = ##class(dc.withLove.storage.LLMSession).SessionIdxOpen(pTenantId, pSessionId)
         If '$IsObject(tSession) {
             Set tSession = ##class(dc.withLove.storage.LLMSession).%New()
@@ -85,43 +85,26 @@ ClassMethod AgentRun(pSessionId As %String, pTenantId As %String, pUserPrompt As
             Set tSession.TenantId = pTenantId
         }
 
-        // ====================================================
-        // HITL PHASE 1: EXECUTION (APPROVAL)
-        // ====================================================
-        
+        // --- HITL PHASE 1: EXECUTION ---
         If (pUserPrompt = "CONFIRM_APPROVE") && (tSession.CurrentState = "AWAITING_APPROVAL") {
-            
             Set tCode = tSession.DraftCode.Read($$$MaxStringLength)
             Set tType = tSession.DraftType
             Set tDeployResult = ""
 
-            // --- DEPLOY LOGIC ---
             If (tType = "BACKEND") {
                 Set tDeployResult = ##class(dc.withLove.engine.ClassFactory).DeployBackend(tCode, pTenantId)
-                If ($Extract(tDeployResult,1,5) = "ERROR") {
-                     Set tResponse.content = "❌ **Deploy Failed:** " _ tDeployResult
-                } Else {
-                     Set tResponse.content = "✅ **Deployed!** Table: `" _ tDeployResult _ "` created."
-                }
+                If ($Extract(tDeployResult,1,5) = "ERROR") { Set tResponse.content = "❌ **Deploy Failed:** " _ tDeployResult } Else { Set tResponse.content = "✅ **Deployed!** Table: `" _ tDeployResult _ "` created." }
             } ElseIf (tType = "API") {
                 Set tClassName = ##class(dc.withLove.engine.ApiFactory).DeployApi(tCode, pTenantId)
-                If ($Extract(tClassName,1,5) = "ERROR") {
-                    Set tResponse.content = "❌ **Deploy Failed:** " _ tClassName
-                } Else {
-                    Set tService = $Piece(tClassName, ".", *)
-                    Set tUrl = "/withlove/services/" _ pTenantId _ "/" _ tService
-                    Set tResponse.content = "✅ **Deployed!** API available at: `" _ tUrl _ "`"
-                }
+                If ($Extract(tClassName,1,5) = "ERROR") { Set tResponse.content = "❌ **Deploy Failed:** " _ tClassName } Else { Set tService = $Piece(tClassName, ".", *) Set tUrl = "/withlove/services/" _ pTenantId _ "/" _ tService Set tResponse.content = "✅ **Deployed!** API available at: `" _ tUrl _ "`" }
             } ElseIf (tType = "UI") {
                 Set tAppName = "App" _ $Random(100000)
                 Set tUrl = ##class(dc.withLove.engine.AppFactory).CreateApp(pTenantId, tAppName, tCode)
                 Set tResponse.content = "✅ **Deployed!** App URL: `" _ tUrl _ "`"
             } ElseIf (tType = "INTEROP") {
-                 Set tClassName = ##class(dc.withLove.engine.InteropFactory).DeployComponent(tCode, pTenantId)
-                 Set tResponse.content = "✅ **Deployed!** Interop Component: `" _ tClassName _ "`"
+                Set tClassName = ##class(dc.withLove.engine.InteropFactory).DeployComponent(tCode, pTenantId)
+                Set tResponse.content = "✅ **Deployed!** Interop Component: `" _ tClassName _ "`"
             }
-
-            // Reset State to IDLE
             Do tSession.ClearDraft() 
             Set tResponse.type = "text"
             Do tSession.AddMessage("assistant", tResponse.content)
@@ -130,67 +113,53 @@ ClassMethod AgentRun(pSessionId As %String, pTenantId As %String, pUserPrompt As
         
         If (pUserPrompt = "CANCEL_DRAFT") && (tSession.CurrentState = "AWAITING_APPROVAL") {
             Do tSession.ClearDraft()
-            Set tResponse.content = "❌ Draft discarded. What should we do next?"
+            Set tResponse.content = "❌ Draft discarded."
             Set tResponse.type = "text"
             Do tSession.AddMessage("assistant", tResponse.content)
             Return tResponse
         }
 
         If (tSession.CurrentState = "AWAITING_APPROVAL") {
-             Set tDraft = tSession.DraftCode.Read($$$MaxStringLength)
-             Set pUserPrompt = "I have this draft code: " _ $C(10) _ tDraft _ $C(10,10) _ 
-                               "Please apply this change: " _ pUserPrompt
+            Set tDraft = tSession.DraftCode.Read($$$MaxStringLength)
+            Set pUserPrompt = "I have this draft code: " _ $C(10) _ tDraft _ $C(10,10) _ "Please apply this change: " _ pUserPrompt
         }
 
-        // ====================================================
-        // HITL PHASE 2: GENERATION (DRAFTING)
-        // ====================================================
-        
+        // --- HITL PHASE 2: GENERATION ---
         Do tSession.AddMessage("user", pUserPrompt)
         
-        // RAG Context Retrieval
         Set tContextString = ""
         Set tUserVector = ..GenerateEmbedding(pUserPrompt)
-        If (tUserVector '= "") {
-            Set tContextString = ..RetrieveContext(pTenantId, tUserVector)
-        }
+        If (tUserVector '= "") { Set tContextString = ..RetrieveContext(pTenantId, tUserVector) }
         If tContextString = "" Set tContextString = "No specific documents found."
 
-        // Supervisor Decision
         Set tSystemPrompt = $Replace(..#SUPERVISORPROMPT, "{{CONTEXT_DATA}}", tContextString)
         Set tDecision = ..PyCallLLM(tSession.GetHistory().%ToJSON(), pApiKey, pModel, tSystemPrompt)
-        
-        // --- ROUTING & DRAFTING ---
         
         Set tGenCode = ""
         Set tAgentType = ""
         Set tThought = ""
 
-        If (tDecision [ "[DELEGATE: BACKEND]") {
-            Set tInstructions = $Piece(tDecision, "[DELEGATE: BACKEND]", 2)
-            Set tGenCode = ..CallWorker(tInstructions, pApiKey, pModel, ..#BACKENDPROMPT)
-            Set tAgentType = "BACKEND"
-            Set tThought = "I have generated the SQL Class. Please review before deploying."
-
-        } ElseIf (tDecision [ "[DELEGATE: API]") {
-            Set tInstructions = $Piece(tDecision, "[DELEGATE: API]", 2)
-            Set tGenCode = ..CallWorker(tInstructions, pApiKey, pModel, ..#APIPROMPT)
-            Set tAgentType = "API"
-            Set tThought = "I have generated the REST API. Please review logic and routes."
-
-        } ElseIf (tDecision [ "[DELEGATE: UI]") {
+        If (tDecision [ "[DELEGATE: UI]") {
             Set tInstructions = $Piece(tDecision, "[DELEGATE: UI]", 2)
             Set tFullInstructions = "Context: " _ tContextString _ $C(10) _ "Instructions: " _ tInstructions
             Set tGenCode = ..CallWorker(tFullInstructions, pApiKey, pModel, ..#UIPROMPT)
             Set tAgentType = "UI"
             Set tThought = "I have designed the UI. Preview generated."
-
+        } ElseIf (tDecision [ "[DELEGATE: BACKEND]") {
+            Set tInstructions = $Piece(tDecision, "[DELEGATE: BACKEND]", 2)
+            Set tGenCode = ..CallWorker(tInstructions, pApiKey, pModel, ..#BACKENDPROMPT)
+            Set tAgentType = "BACKEND"
+            Set tThought = "I have generated the SQL Class."
+        } ElseIf (tDecision [ "[DELEGATE: API]") {
+            Set tInstructions = $Piece(tDecision, "[DELEGATE: API]", 2)
+            Set tGenCode = ..CallWorker(tInstructions, pApiKey, pModel, ..#APIPROMPT)
+            Set tAgentType = "API"
+            Set tThought = "I have generated the REST API."
         } ElseIf (tDecision [ "[DELEGATE: INTEROP]") {
             Set tInstructions = $Piece(tDecision, "[DELEGATE: INTEROP]", 2)
             Set tGenCode = ..CallWorker(tInstructions, pApiKey, pModel, ..#INTEROPPROMPT)
             Set tAgentType = "INTEROP"
-            Set tThought = "I have generated the DTL/BO. Please review XML/ObjectScript."
-        
+            Set tThought = "I have generated the Interop Component."
         } ElseIf (tDecision [ "[DELEGATE: INTEGRATION]") {
             Set tRawContent = $Piece(tDecision, "[DELEGATE: INTEGRATION]", 2)
             Set tJsonData = ..CallWorker(tRawContent, pApiKey, pModel, ..#INTEGRATIONPROMPT)
@@ -198,51 +167,52 @@ ClassMethod AgentRun(pSessionId As %String, pTenantId As %String, pUserPrompt As
             Set tResponse.content = "Integration Result: " _ tResult.status
         }
         
-        // --- FALLBACK ROUTING (Security Net) ---
-        // If Supervisor forgot the tag but we detect clear intent
+        // --- FALLBACK ROUTING (Safety Net) ---
         If (tGenCode = "") && (tDecision '[ "[DELEGATE:") {
             Set tLowerDecision = $ZConvert(tDecision, "L")
             Set tLowerPrompt = $ZConvert(pUserPrompt, "L")
             
+            // UI Fallback
             If (tLowerPrompt [ "ui") || (tLowerPrompt [ "page") || (tLowerPrompt [ "screen") || (tLowerPrompt [ "frontend") {
                 Set tGenCode = ..CallWorker(pUserPrompt, pApiKey, pModel, ..#UIPROMPT)
                 Set tAgentType = "UI"
                 Set tThought = "I have designed the UI (Fallback)."
-            }
+            } 
+            // API Fallback
             ElseIf (tLowerPrompt [ "api") || (tLowerPrompt [ "rest") || (tLowerPrompt [ "endpoint") {
                 Set tGenCode = ..CallWorker(pUserPrompt, pApiKey, pModel, ..#APIPROMPT)
                 Set tAgentType = "API"
                 Set tThought = "I have generated the API (Fallback)."
             }
+            // INTEROP Fallback (NEW!) - Captures "Operation", "Service", "DTL"
+            ElseIf (tLowerPrompt [ "interop") || (tLowerPrompt [ "operation") || (tLowerPrompt [ "service") || (tLowerPrompt [ "dtl") || (tLowerPrompt [ "production") {
+                Set tGenCode = ..CallWorker(pUserPrompt, pApiKey, pModel, ..#INTEROPPROMPT)
+                Set tAgentType = "INTEROP"
+                Set tThought = "I have generated the Interop Component (Fallback)."
+            }
         }
 
-        // --- SAVE DRAFT & RETURN REVIEW REQUEST ---
-        
+        // --- RESPONSE PACKAGING ---
         If (tGenCode '= "") {
-            // Save to Session Memory
             Do tSession.DraftCode.Clear()
             Do tSession.DraftCode.Write(tGenCode)
             Set tSession.DraftType = tAgentType
             Set tSession.CurrentState = "AWAITING_APPROVAL"
             Do tSession.%Save()
 
-            // --- TYPE DETECTION (Case Insensitive) ---
             Set tLowerCode = $ZConvert(tGenCode, "L")
-            
             If (tLowerCode [ "<!doctype html") || (tLowerCode [ "<html") {
-                Set tResponse.type = "code" // Forces Canvas Preview
+                Set tResponse.type = "code" 
                 Set tResponse.thought = "✅ I have generated the App UI."
             } Else {
                 Set tResponse.type = "review"
                 Set tResponse.thought = tThought
             }
             
-            // WRAP IN CDATA for safe transport
             Set tResponse.content = "<![CDATA[" _ $C(10) _ tGenCode _ $C(10) _ "]]>"
             Do tSession.AddMessage("assistant", tResponse.thought)
             
         } Else {
-            // General Chat
             Set tResponse.type = "text"
             If tResponse.content = "" Set tResponse.content = tDecision
             Do tSession.AddMessage("assistant", tDecision)
@@ -252,7 +222,6 @@ ClassMethod AgentRun(pSessionId As %String, pTenantId As %String, pUserPrompt As
         Set tResponse.type = "error"
         Set tResponse.content = ex.DisplayString()
     }
-    
     Return tResponse
 }
 
