@@ -115,6 +115,8 @@ ClassMethod AgentRun(pSessionId As %String, pTenantId As %String, pUserPrompt As
                 Set tClassName = ##class(dc.withLove.engine.InteropFactory).DeployComponent(tCode, pTenantId)
                 Set tResponse.content = "✅ **Deployed!** Interop Component: `" _ tClassName _ "`"
             }
+            // Não há deploy para FHIR (é apenas visualização/cópia), mas limpamos o rascunho.
+            
             Do tSession.ClearDraft() 
             Set tResponse.type = "text"
             Do tSession.AddMessage("assistant", tResponse.content)
@@ -170,20 +172,22 @@ ClassMethod AgentRun(pSessionId As %String, pTenantId As %String, pUserPrompt As
             Set tGenCode = ..CallWorker(tInstructions, pApiKey, pModel, ..#INTEROPPROMPT)
             Set tAgentType = "INTEROP"
             Set tThought = "I have generated the Interop Component."
+        } ElseIf (tDecision [ "[DELEGATE: FHIR]") {
+            Set tInstructions = $Piece(tDecision, "[DELEGATE: FHIR]", 2)
+            Set tGenCode = ..CallWorker(tInstructions, pApiKey, pModel, ..#FHIRPROMPT)
+            Set tAgentType = "FHIR"
+            Set tThought = "I have generated the FHIR JSON data."
         } ElseIf (tDecision [ "[DELEGATE: INTEGRATION]") {
             Set tRawContent = $Piece(tDecision, "[DELEGATE: INTEGRATION]", 2)
             Set tJsonData = ..CallWorker(tRawContent, pApiKey, pModel, ..#INTEGRATIONPROMPT)
-            Set tResult = ##class(dc.withLove.engine.FHIRToSDAHandler).ProcessFHIR(tJsonData)
-            Set tResponse.content = "Integration Result: " _ tResult.status
-        } 
-        
-        // --- NEW: KNOWLEDGE INGESTION ---
-        ElseIf (tDecision [ "[DELEGATE: KNOWLEDGE]") {
-            Set tInstructions = $Piece(tDecision, "[DELEGATE: KNOWLEDGE]", 2)
-            // Call worker to extract structure (Title, Content)
-            Set tJsonStr = ..CallWorker(tInstructions, pApiKey, pModel, ..#KNOWLEDGEPROMPT)
+            Set tResultObj = ##class(dc.withLove.engine.FHIRHandler).ImportFHIR(pTenantId, tJsonData)
+            Set tResponse.content = "✅ **Integration Report:**" _ $C(10,10) _ tResultObj.message
+            Set tResponse.type = "text"
+            Do tSession.AddMessage("assistant", tResponse.content)
             
-            // Parse JSON and Save
+        } ElseIf (tDecision [ "[DELEGATE: KNOWLEDGE]") {
+            Set tInstructions = $Piece(tDecision, "[DELEGATE: KNOWLEDGE]", 2)
+            Set tJsonStr = ..CallWorker(tInstructions, pApiKey, pModel, ..#KNOWLEDGEPROMPT)
             Set tData = {}.%FromJSON(tJsonStr)
             Set tSC = ##class(dc.withLove.service.KnowledgeService).AddDocument(pTenantId, tData.title, tData.content)
             
@@ -202,17 +206,15 @@ ClassMethod AgentRun(pSessionId As %String, pTenantId As %String, pUserPrompt As
             Set tLowerDecision = $ZConvert(tDecision, "L")
             Set tLowerPrompt = $ZConvert(pUserPrompt, "L")
             
-            If (tLowerPrompt [ "ui") || (tLowerPrompt [ "page") || (tLowerPrompt [ "screen") || (tLowerPrompt [ "frontend") {
+            If (tLowerPrompt [ "ui") || (tLowerPrompt [ "page") || (tLowerPrompt [ "screen") {
                 Set tGenCode = ..CallWorker(pUserPrompt, pApiKey, pModel, ..#UIPROMPT)
                 Set tAgentType = "UI"
                 Set tThought = "I have designed the UI (Fallback)."
-            } 
-            ElseIf (tLowerPrompt [ "api") || (tLowerPrompt [ "rest") || (tLowerPrompt [ "endpoint") {
+            } ElseIf (tLowerPrompt [ "api") || (tLowerPrompt [ "rest") {
                 Set tGenCode = ..CallWorker(pUserPrompt, pApiKey, pModel, ..#APIPROMPT)
                 Set tAgentType = "API"
                 Set tThought = "I have generated the API (Fallback)."
-            }
-            ElseIf (tLowerPrompt [ "interop") || (tLowerPrompt [ "operation") || (tLowerPrompt [ "service") || (tLowerPrompt [ "dtl") || (tLowerPrompt [ "production") {
+            } ElseIf (tLowerPrompt [ "interop") || (tLowerPrompt [ "operation") {
                 Set tGenCode = ..CallWorker(pUserPrompt, pApiKey, pModel, ..#INTEROPPROMPT)
                 Set tAgentType = "INTEROP"
                 Set tThought = "I have generated the Interop Component (Fallback)."
@@ -239,9 +241,9 @@ ClassMethod AgentRun(pSessionId As %String, pTenantId As %String, pUserPrompt As
             Set tResponse.content = "<![CDATA[" _ $C(10) _ tGenCode _ $C(10) _ "]]>"
             Do tSession.AddMessage("assistant", tResponse.thought)
             
-        } Else {
+        } ElseIf (tResponse.content = "") {
             Set tResponse.type = "text"
-            If tResponse.content = "" Set tResponse.content = tDecision
+            Set tResponse.content = tDecision
             Do tSession.AddMessage("assistant", tDecision)
         }
         
