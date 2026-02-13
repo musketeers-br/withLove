@@ -10,16 +10,15 @@ Property Title As %String(MAXLEN = 255);
 Property Content As %String(MAXLEN = "");
 
 /// IRIS Native Vector Storage (requires IRIS 2024.1+)
-/// Vetor 384 dimensions (all-MiniLM-L6-v2)
-Property Embedding As %Vector(DATATYPE = "DECIMAL", LEN = 384);
+Property Embedding As %Vector(DATATYPE = "DOUBLE", LEN = 384);
 
 Index TenantIdx On TenantID;
 
-Query RetrieveContext(pTenantId As %String, pVectorStr As %String) As %SQLQuery(COMPILEMODE = "IMMEDIATE", ROWSPEC = "Title:%String, Content:%String", SELECTMODE = "RUNTIME") [ SqlProc ]
+Query RetrieveContext(pTenantId As %String, pQueryVector As %String) As %SQLQuery(COMPILEMODE = "IMMEDIATE", ROWSPEC = "Title:%String, Content:%String", SELECTMODE = "RUNTIME") [ SqlProc ]
 {
     SELECT TOP 3 Title, Content FROM dc_withLove_storage.KnowledgeBase
     WHERE TenantID = :pTenantId
-    ORDER BY VECTOR_DOT_PRODUCT(Embedding, TO_VECTOR(:pVectorStr, DECIMAL)) DESC
+    ORDER BY VECTOR_DOT_PRODUCT(Embedding, TO_VECTOR(:pVectorStr, DOUBLE, 384)) DESC
 }
 
 Storage Default

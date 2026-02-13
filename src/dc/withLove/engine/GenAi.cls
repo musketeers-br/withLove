@@ -57,6 +57,15 @@ Parameter INTEGRATIONPROMPT = {"You are the Integration Agent. Your job is to ex
     "The user will provide FHIR data. You must output ONLY the raw JSON string found."_
     "Do not explain, do not wrap in markdown."};
 
+Parameter KNOWLEDGEPROMPT = {"You are the Knowledge Curator. Your goal is to structure information to be saved in the vector database."_
+    "Analyze the user request and extract the core knowledge."_
+    "Output a STRICT JSON object with two keys:"_
+    "1. 'title': A short, descriptive title (3-5 words)."_
+    "2. 'content': The full detailed information to be memorized."_
+    "Example Input: 'Learn that the hospital visiting hours are 8am to 8pm.'"_
+    "Example Output: {""title"": ""Hospital Visiting Hours"", ""content"": ""Visiting hours are daily from 8am to 8pm.""}"_
+    "Output ONLY JSON."};
+
 Parameter SUPERVISORPROMPT = {"You are a STRICT Router. You do NOT write code. You only route tasks to workers."_
     "You MUST start your response with a tag like [DELEGATE: ...]."_
     "CONTEXT: {{CONTEXT_DATA}}"_
@@ -68,7 +77,8 @@ Parameter SUPERVISORPROMPT = {"You are a STRICT Router. You do NOT write code. Y
     "4. For Interop Components (Business Service, Business Operation, DTL, Transformations) -> '[DELEGATE: INTEROP] <instructions>'."_
     "5. For Generating/Mocking JSON Data -> '[DELEGATE: FHIR] <instructions>'."_
     "6. For Loading/Importing Data -> '[DELEGATE: INTEGRATION] <content>'."_
-    "7. If no code is needed -> Just answer the user."};
+    "7. For Memorizing/Learning/Saving Knowledge -> '[DELEGATE: KNOWLEDGE] <content_to_learn>'."_
+    "8. If no code/action is needed -> Just answer the user."};
 
 /// =========================================================
 /// 2. ORCHESTRATOR LOGIC
@@ -165,26 +175,43 @@ ClassMethod AgentRun(pSessionId As %String, pTenantId As %String, pUserPrompt As
             Set tJsonData = ..CallWorker(tRawContent, pApiKey, pModel, ..#INTEGRATIONPROMPT)
             Set tResult = ##class(dc.withLove.engine.FHIRToSDAHandler).ProcessFHIR(tJsonData)
             Set tResponse.content = "Integration Result: " _ tResult.status
+        } 
+        
+        // --- NEW: KNOWLEDGE INGESTION ---
+        ElseIf (tDecision [ "[DELEGATE: KNOWLEDGE]") {
+            Set tInstructions = $Piece(tDecision, "[DELEGATE: KNOWLEDGE]", 2)
+            // Call worker to extract structure (Title, Content)
+            Set tJsonStr = ..CallWorker(tInstructions, pApiKey, pModel, ..#KNOWLEDGEPROMPT)
+            
+            // Parse JSON and Save
+            Set tData = {}.%FromJSON(tJsonStr)
+            Set tSC = ##class(dc.withLove.service.KnowledgeService).AddDocument(pTenantId, tData.title, tData.content)
+            
+            If $$$ISOK(tSC) {
+                Set tResponse.content = "✅ **Knowledge Saved!**" _ $C(10,10) _ "📝 **Title:** " _ tData.title _ $C(10) _ "📄 **Content:** " _ $Extract(tData.content, 1, 100) _ "..."
+            } Else {
+                Set tResponse.content = "❌ Error saving knowledge: " _ $System.Status.GetErrorText(tSC)
+            }
+            Set tResponse.type = "text"
+            Do tSession.AddMessage("assistant", tResponse.content)
+            Return tResponse
         }
         
-        // --- FALLBACK ROUTING (Safety Net) ---
+        // --- FALLBACK ROUTING ---
         If (tGenCode = "") && (tDecision '[ "[DELEGATE:") {
             Set tLowerDecision = $ZConvert(tDecision, "L")
             Set tLowerPrompt = $ZConvert(pUserPrompt, "L")
             
-            // UI Fallback
             If (tLowerPrompt [ "ui") || (tLowerPrompt [ "page") || (tLowerPrompt [ "screen") || (tLowerPrompt [ "frontend") {
                 Set tGenCode = ..CallWorker(pUserPrompt, pApiKey, pModel, ..#UIPROMPT)
                 Set tAgentType = "UI"
                 Set tThought = "I have designed the UI (Fallback)."
             } 
-            // API Fallback
             ElseIf (tLowerPrompt [ "api") || (tLowerPrompt [ "rest") || (tLowerPrompt [ "endpoint") {
                 Set tGenCode = ..CallWorker(pUserPrompt, pApiKey, pModel, ..#APIPROMPT)
                 Set tAgentType = "API"
                 Set tThought = "I have generated the API (Fallback)."
             }
-            // INTEROP Fallback (NEW!) - Captures "Operation", "Service", "DTL"
             ElseIf (tLowerPrompt [ "interop") || (tLowerPrompt [ "operation") || (tLowerPrompt [ "service") || (tLowerPrompt [ "dtl") || (tLowerPrompt [ "production") {
                 Set tGenCode = ..CallWorker(pUserPrompt, pApiKey, pModel, ..#INTEROPPROMPT)
                 Set tAgentType = "INTEROP"
