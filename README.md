@@ -291,6 +291,20 @@ withLove/
 
 ---
 
+## 📹 Highlights: Building with Love 🤍
+
+See the **Full Stack Architect** agent in action. Zero boilerplate, pure creation.
+
+| Category | Demo (Click to Watch) | Description |
+| :--- | :---: | :--- |
+| **💾 Table (Backend)** | [![Table Demo](https://i.ytimg.com/vi/DGcAJRraH28/hqdefault.jpg?sqp=-oaymwFBCNACELwBSFryq4qpAzMIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB8AEB-AH-CYAC0AWKAgwIABABGE4gVihlMA8=&rs=AOn4CLArMm7ixllIwdAd2s-s4kXPUfxgBw)](https://youtu.be/DGcAJRraH28) | *Designing robust SQL Tables (%Persistent) with JSON adapters instantly.* |
+| **🧠 RAG (Knowledge)** | [![RAG Demo](https://i9.ytimg.com/vi/tw3HQm3gXE4/mqdefault.jpg?sqp=CLiNv8wG-oaymwEmCMACELQB8quKqQMa8AEB-AH-CYAC0AWKAgwIABABGEEgTShlMA8=&rs=AOn4CLDJ37TqkQwVk0KoISeiKW4Ckz7CXA)](https://youtu.be/tw3HQm3gXE4) | *Teaching the AI about specific medication via Chat prompt.* |
+| **🔌 API (Services)** | [![API Demo](https://i9.ytimg.com/vi/TXeIkT3tYN4/mqdefault.jpg?sqp=CLiNv8wG-oaymwEmCMACELQB8quKqQMa8AEB-AH-CYAC0AWKAgwIABABGEcgVShyMA8=&rs=AOn4CLBIbHw59_nRxrjVJHrl4kvQS0Dz4A)](https://youtu.be/TXeIkT3tYN4) | *Deploying a REST API with Auto-Healing & Error Handling.* |
+| **🔥 FHIR (Integration)** | [![FHIR Demo](https://i9.ytimg.com/vi/oStE5CnPRco/mqdefault.jpg?sqp=CLyUv8wG-oaymwEmCMACELQB8quKqQMa8AEB-AHUBoAC4AOKAgwIABABGFsgWyhbMA8=&rs=AOn4CLDebLzHCuSpwUfF3EGcW95__CCDeg)](https://youtu.be/oStE5CnPRco) | *Generating synthetic FHIR R4 JSON * |
+
+> **Note:** Click the images above to watch the YouTube Shorts.
+---
+
 ## 🔌 API Reference
 
 ### **Core Endpoints**
@@ -301,9 +315,6 @@ withLove/
 | `/withlove/api/deploy` | POST | Deploy generated assets |
 | `/withlove/api/knowledge/add` | POST | Add document to RAG |
 | `/withlove/api/knowledge/list` | GET | List RAG documents |
-| `/withlove/api/scan/list` | GET | List brownfield assets |
-| `/withlove/api/scan/analyze` | POST | Analyze asset with AI |
-| `/withlove/api/dashboard/summary` | GET | Get dashboard metrics |
 
 ### **Dynamic Service Endpoints**
 
