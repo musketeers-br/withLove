@@ -1,36 +1,61 @@
 Class dc.withLove.service.ScannerService Extends %RegisteredObject
 {
 
+Query GetAllClasses() As %SQLQuery(COMPILEMODE = "IMMEDIATE", ROWSPEC = "ID:%String", SELECTMODE = "RUNTIME") [ SqlProc ]
+{
+    SELECT ID
+    FROM %Dictionary.ClassDefinition 
+    WHERE Super LIKE '%Persistent%'
+    AND Name NOT LIKE '%Lib%'
+    AND Name NOT LIKE '%System%'  
+    AND Name NOT LIKE 'Ens%'  
+    AND Name NOT LIKE 'HS%'  
+    AND Name NOT LIKE 'INFORMATION.SCHEMA%'  
+    AND Name NOT LIKE 'dc.withLove.engine%'
+}
+
+Query GetProperties(pClassName As %String) As %SQLQuery(COMPILEMODE = "IMMEDIATE", ROWSPEC = "Name:%String, Type:%String", SELECTMODE = "RUNTIME") [ SqlProc ]
+{
+    SELECT Name, Type FROM %Dictionary.PropertyDefinition WHERE parent = :pClassName
+}
+
 /// Lists all Persistent Classes (Tables) belonging to the user/tenant.
 /// Filters out system classes and libraries to reduce noise.
-ClassMethod ListUserAssets(pTenantId As %String) As %DynamicArray
+ClassMethod ScanTenantClasses(pTenantId As %String) As %String
 {
-    Set tArr = []
-    Try {
-        // Query the Class Dictionary to find user classes
-        Set tQuery = "SELECT ID, Super FROM %Dictionary.ClassDefinition " _
-                    "WHERE Name NOT LIKE '%Lib%' " _ 
-                    "AND Name NOT LIKE '%System%' " _
-                    "AND Name NOT LIKE 'Ens%' " _
-                    "AND Name NOT LIKE 'HS%' " _
-                    "AND Name NOT LIKE 'dc.withLove.engine%' " // Ignore the engine itself
-        Set tRS = ##class(%SQL.Statement).%ExecDirect(, tQuery)
+    Set tSchemaInfo = []
+    
+    Set tPropStat =  ##class(%SQL.Statement).%New()
+    $$$ThrowOnError(tPropStat.%PrepareClassQuery("dc.withLove.service.ScannerService", "GetProperties"))
+    Set statement = ##class(%SQL.Statement).%New()
+    $$$ThrowOnError(statement.%PrepareClassQuery("dc.withLove.service.ScannerService", "GetAllClasses"))
+    Set tRS = statement.%Execute()
+    
+    While tRS.%Next() {
+        Set tClassName = tRS.%Get("ID")
+        Continue:($Extract(tClassName, 1) = "%")
+        Continue:($Extract(tClassName, 1, 4) = "Ens.")
+        Continue:($Extract(tClassName, 1, 3) = "HS.") 
+        Continue:($Extract(tClassName, 1, 4) = "CSP.") 
+        Continue:($Extract(tClassName, 1, 11) = "dc.withLove") 
+        // ---------------------------------------
+        Set tClassObj = { "className": (tClassName), "properties": [] }
         
-        While tRS.%Next() {
-            // Filter by Tenant ID if the naming convention is used (dc.withLove.<tenant>...)
-            // If pTenantId is provided, we only show assets containing that string
-            If (pTenantId'="") && (tRS.ID '[ pTenantId) Continue
-            
-            Do tArr.%Push({
-                "name": (tRS.ID),
-                "type": "class",
-                "super": (tRS.Super)
-            })
+        Set tPropRS = tPropStat.%Execute(tClassName) 
+        
+        While tPropRS.%Next() {
+            If ($Extract(tPropRS.%Get("Name"), 1) '= "%") {
+                Do tClassObj.properties.%Push(tPropRS.%Get("Name") _ " (" _ tPropRS.%Get("Type") _ ")")
+            }
         }
-    } Catch ex {
-        // Silently fail loop on error
+        
+        Do tSchemaInfo.%Push(tClassObj)
     }
-    Return tArr
+    If tSchemaInfo.%Size() = 0 {
+        Return "No legacy tables found in this Namespace. The scanner ignored system classes and 'dc.withLove' classes."
+    }
+    
+    Return tSchemaInfo.%ToJSON()
 }
 
 /// Retrieves the full source code (UDL) of a given asset.

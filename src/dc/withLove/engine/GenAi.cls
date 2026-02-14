@@ -66,6 +66,16 @@ Parameter KNOWLEDGEPROMPT = {"You are the Knowledge Curator. Your goal is to str
     "Example Output: {""title"": ""Hospital Visiting Hours"", ""content"": ""Visiting hours are daily from 8am to 8pm.""}"_
     "Output ONLY JSON."};
 
+Parameter SCANNERPROMPT = {"You are a Senior System Architect. You have analyzed the existing database schema."_
+    "Your goal is to suggest 3 HIGH-VALUE REST APIs based on the available tables."_
+    "INPUT: A JSON list of Classes and Properties."_
+    "OUTPUT: A markdown summary listing suggestions."_
+    "FORMAT:"_
+    "1. **API Name** (e.g., Patient Management API)"_
+    "2. **Description**: Why this is useful."_
+    "3. **Suggested Endpoints**: List GET/POST routes."_
+    "4. **Prompt to Build**: The exact command the user should type to create it."};
+
 Parameter SUPERVISORPROMPT = {"You are a STRICT Router. You do NOT write code. You only route tasks to workers."_
     "You MUST start your response with a tag like [DELEGATE: ...]."_
     "CONTEXT: {{CONTEXT_DATA}}"_
@@ -78,7 +88,8 @@ Parameter SUPERVISORPROMPT = {"You are a STRICT Router. You do NOT write code. Y
     "5. For Generating/Mocking JSON Data -> '[DELEGATE: FHIR] <instructions>'."_
     "6. For Loading/Importing Data -> '[DELEGATE: INTEGRATION] <content>'."_
     "7. For Memorizing/Learning/Saving Knowledge -> '[DELEGATE: KNOWLEDGE] <content_to_learn>'."_
-    "8. If no code/action is needed -> Just answer the user."};
+    "8. For Analyzing System/Scanning/Suggesting APIs based on existing tables -> '[DELEGATE: SCANNER] <request>'."_
+    "9. If no code/action is needed -> Just answer the user."};
 
 /// =========================================================
 /// 2. ORCHESTRATOR LOGIC
@@ -184,7 +195,17 @@ ClassMethod AgentRun(pSessionId As %String, pTenantId As %String, pUserPrompt As
             Set tResponse.content = "✅ **Integration Report:**" _ $C(10,10) _ tResultObj.message
             Set tResponse.type = "text"
             Do tSession.AddMessage("assistant", tResponse.content)
-            
+        } ElseIf (tDecision [ "[DELEGATE: SCANNER]") {
+            Set tResponse.type = "text"
+            Set tSchemaJson = ##class(dc.withLove.service.ScannerService).ScanTenantClasses(pTenantId)
+            If (tSchemaJson [ "No custom classes") {
+                Set tResponse.content = "⚠️ " _ tSchemaJson
+            } Else {
+                Set tFullPrompt = "Current System Schema: " _ tSchemaJson
+                Set tAnalysis = ..CallWorker(tFullPrompt, pApiKey, pModel, ..#SCANNERPROMPT)
+                Set tResponse.content = "🔍 **System Analysis Complete**" _ $C(10,10) _ tAnalysis
+            }
+            Do tSession.AddMessage("assistant", tResponse.content)
         } ElseIf (tDecision [ "[DELEGATE: KNOWLEDGE]") {
             Set tInstructions = $Piece(tDecision, "[DELEGATE: KNOWLEDGE]", 2)
             Set tJsonStr = ..CallWorker(tInstructions, pApiKey, pModel, ..#KNOWLEDGEPROMPT)

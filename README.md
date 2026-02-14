@@ -270,6 +270,7 @@ withLove/
 │   │       │   ├── AppFactory.cls
 │   │       │   ├── ApiFactory.cls
 │   │       │   ├── ClassFactory.cls
+│   │       │   └── FHIRHandler.cls
 │   │       │   └── InteropFactory.cls
 │   │       ├── service/         # Business Logic
 │   │       │   ├── Dispatch.cls # REST API Router
@@ -297,10 +298,10 @@ See the **Full Stack Architect** agent in action. Zero boilerplate, pure creatio
 
 | Category | Demo (Click to Watch) | Description |
 | :--- | :---: | :--- |
-| **💾 Table (Backend)** | [![Table Demo](https://i.ytimg.com/vi/DGcAJRraH28/hqdefault.jpg?sqp=-oaymwFBCNACELwBSFryq4qpAzMIARUAAIhCGAHYAQHiAQoIGBACGAY4AUAB8AEB-AH-CYAC0AWKAgwIABABGE4gVihlMA8=&rs=AOn4CLArMm7ixllIwdAd2s-s4kXPUfxgBw)](https://youtu.be/DGcAJRraH28) | *Designing robust SQL Tables (%Persistent) with JSON adapters instantly.* |
-| **🧠 RAG (Knowledge)** | [![RAG Demo](https://i9.ytimg.com/vi/tw3HQm3gXE4/mqdefault.jpg?sqp=CLiNv8wG-oaymwEmCMACELQB8quKqQMa8AEB-AH-CYAC0AWKAgwIABABGEEgTShlMA8=&rs=AOn4CLDJ37TqkQwVk0KoISeiKW4Ckz7CXA)](https://youtu.be/tw3HQm3gXE4) | *Teaching the AI about specific medication via Chat prompt.* |
-| **🔌 API (Services)** | [![API Demo](https://i9.ytimg.com/vi/TXeIkT3tYN4/mqdefault.jpg?sqp=CLiNv8wG-oaymwEmCMACELQB8quKqQMa8AEB-AH-CYAC0AWKAgwIABABGEcgVShyMA8=&rs=AOn4CLBIbHw59_nRxrjVJHrl4kvQS0Dz4A)](https://youtu.be/TXeIkT3tYN4) | *Deploying a REST API with Auto-Healing & Error Handling.* |
-| **🔥 FHIR (Integration)** | [![FHIR Demo](https://i9.ytimg.com/vi/oStE5CnPRco/mqdefault.jpg?sqp=CLyUv8wG-oaymwEmCMACELQB8quKqQMa8AEB-AHUBoAC4AOKAgwIABABGFsgWyhbMA8=&rs=AOn4CLDebLzHCuSpwUfF3EGcW95__CCDeg)](https://youtu.be/oStE5CnPRco) | *Generating synthetic FHIR R4 JSON * |
+| **💾 Table (Backend)** | [![Table Demo](https://img.youtube.com/vi/DGcAJRraH28/maxresdefault.jpg)](https://youtu.be/DGcAJRraH28) | *Designing robust SQL Tables (%Persistent) with JSON adapters instantly.* |
+| **🧠 RAG (Knowledge)** | [![RAG Demo](https://img.youtube.com/vi/tw3HQm3gXE4/maxresdefault.jpg)](https://youtu.be/tw3HQm3gXE4) | *Teaching the AI about specific medication via Chat prompt.* |
+| **🔌 API (Services)** | [![API Demo](https://img.youtube.com/vi/TXeIkT3tYN4/maxresdefault.jpg)](https://youtu.be/TXeIkT3tYN4) | *Deploying a REST API with Auto-Healing & Error Handling.* |
+| **🔥 FHIR (Integration)** | [![FHIR Demo](https://img.youtube.com/vi/oStE5CnPRco/maxresdefault.jpg)](https://youtu.be/oStE5CnPRco) | *Generating synthetic FHIR R4 JSON * |
 
 > **Note:** Click the images above to watch the YouTube Shorts.
 ---
