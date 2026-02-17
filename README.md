@@ -344,10 +344,6 @@ PUT /withlove/services/hospital-main/PatientAPI/update/:id
 - [x] RAG Knowledge Base
 - [x] Brownfield Scanner
 
-### 🚧 **v1.0 Gold (Current)**
-- [ ] Complete `GenAi.cls` implementation
-- [ ] End-to-end testing
-
 ---
 
 ## 🎖️ Credits
